@@ -10,7 +10,7 @@ if ($Options.ResetConfig -eq 1) {
 
 [Proxy]::init($Options.Config.Mod, $Options.Config.Auth, $Options.Config.CertThumbprint);
 
-$PromtText = "Selectati modul de lucru`n    1. Upload xml-uri E-Factura din directorul data\upload`n    2. Decarcare lista mesaje E-Factura si zip-uri E (erori) T (trimise) P (primite) R (mesaj partener)`n    3. Reconfigurare`n    sau ENTER pentru inchidere`n"
+$PromtText = "Selectati modul de lucru`n    1. Upload xml-uri E-Factura din directorul data\upload`n    2. Decarcare zip-uri E (erori) T (trimise) P (primite) R (mesaj partener)`n    3. Descarcare lista mesaje E-Factura`n    9. Reconfigurare`n    sau ENTER pentru inchidere`n"
 $Response = (Read-Host -Prompt $PromtText)
 
 if ($Response -eq "") {
@@ -83,7 +83,7 @@ elseif ($Response -eq "1") {
     Read-Host "$($status.ok) fisiere au fost incarcate cu succes; $($status.err) erori.`nApasati ENTER prentu inchidere"
     exit
 }
-elseif ($Response -eq "2") {
+elseif (($Response -eq "2") -or ($Response -eq "3")) {
     $date = (Get-Date).ToString("yyyyMMddHHmm")
     $SfarsitPerioada = [Proxy]::SfarsitPerioada($Options.Config.MinuteAsteptareMesaje)
     $InceputPerioada = [Proxy]::InceputPerioada($Options.Config.NumarZileMesaje, $SfarsitPerioada)
@@ -114,30 +114,35 @@ elseif ($Response -eq "2") {
                 $Response = [Proxy]::DownloadMessageList($InceputPerioada, $SfarsitPerioada, $Options.Config.CifEmitent, $pagina, $type)
                 $ResponseJson = ($Response.Content | ConvertFrom-Json)
                 $totalPagini = $ResponseJson.numar_total_pagini
-                foreach ($mesaj in $ResponseJson.mesaje) {
-                    $log = [PSCustomObject]@{
-                        date = $mesaj.data_creare
-                        cif = $mesaj.cif
-                        id_solicitare = $mesaj.id_solicitare
-                        tip = $type
-                        id = $mesaj.id
-                        status = ""
-                        message = ""
-                    }
-                    $filePath = "$($Options.DataDir)download/$($type)/$($mesaj.id).zip"
-                    if (!(Test-Path -Path $filePath)) {
-                        try {
-                            $DownloadResponse = [Proxy]::Download($mesaj.id, $filePath)
-                            $log.status = "ok"
-                            ++$status.$type.ok
+                if ($Response -eq "2") {
+                    foreach ($mesaj in $ResponseJson.mesaje) {
+                        $log = [PSCustomObject]@{
+                            date = $mesaj.data_creare
+                            cif = $mesaj.cif
+                            id_solicitare = $mesaj.id_solicitare
+                            tip = $type
+                            id = $mesaj.id
+                            status = ""
+                            message = ""
                         }
-                        catch {
-                            $log.status = "err"
-                            $log.message = $_.ToString
-                            ++$status.$type.err
+                        $filePath = "$($Options.DataDir)download/$($type)/$($mesaj.id).zip"
+                        if (!(Test-Path -Path $filePath)) {
+                            try {
+                                $DownloadResponse = [Proxy]::Download($mesaj.id, $filePath)
+                                $log.status = "ok"
+                                ++$status.$type.ok
+                            }
+                            catch {
+                                $log.status = "err"
+                                $log.message = $_.ToString
+                                ++$status.$type.err
+                            }
+                            $log | Export-Csv -NoTypeInformation -Append -Force "$($Options.DataDir)log/$($date.substring(0, 6))-download.csv"
                         }
-                        $log | Export-Csv -NoTypeInformation -Append -Force "$($Options.DataDir)log/$($date.substring(0, 6))-download.csv"
                     }
+                }
+                elseif ($Response -eq "3") {
+                    Set-Content -Path "$($Options.DataDir)download/$($date)-$($type)-p$($pagina).json" -Value $Response.Content
                 }
                 ++$pagina
             }
@@ -156,7 +161,7 @@ elseif ($Response -eq "2") {
     Read-Host "Apasati ENTER prentu inchidere"
     exit
 }
-elseif ($Response -eq "3") {
+elseif ($Response -eq "9") {
     $Options = & $PSScriptRoot/Init.ps1 -ResetConfig 1
     exit
 }
