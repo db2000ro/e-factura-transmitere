@@ -4,6 +4,7 @@ $script = [ScriptBlock]::Create("Using module `"$PSScriptRoot/Proxy.psm1`"")
 $Options = & $PSScriptRoot/Init.ps1 -ResetConfig 0
 
 if ($Options.ResetConfig -eq 1) {
+    $Options.Config
     Read-Host "Configurare terminata. Puteti reporni aplicatia.`nApasati ENTER prentu inchidere"
     exit
 }
@@ -36,9 +37,9 @@ elseif ($Response -eq "1") {
         }
         try {
             $XMLString = Get-Content -Path $file
-            $Response = [Proxy]::Upload($Options.Config.CifEmitent, $XMLString, $Options.Config.Standard)
+            $WebResponse = [Proxy]::Upload($Options.Config.CifEmitent, $XMLString, $Options.Config.Standard)
             try {
-                $ResponseXml = [xml] $Response.Content
+                $ResponseXml = [xml] $WebResponse.Content
 
                 if ($ResponseXml.header.index_incarcare -eq $null) {
                     if ($ResponseXml.header.Errors.errorMessage -ne $null) {
@@ -65,8 +66,8 @@ elseif ($Response -eq "1") {
             if ($ResponseXml -ne $null) {
                 Set-Content -Path ("$($Options.DataDir)upload/err/$($date)-$($fileName)-R-err.xml") -Value $ResponseXml.OuterXml
             }
-            elseif ($Response.Content -ne $null) {
-                Set-Content -Path ("$($Options.DataDir)upload/err/$($date)-$($fileName)-R-err.txt") -Value $Response.Content
+            elseif ($WebResponse.Content -ne $null) {
+                Set-Content -Path ("$($Options.DataDir)upload/err/$($date)-$($fileName)-R-err.txt") -Value $WebResponse.Content
             }
             else {
                 Set-Content -Path ("$($Options.DataDir)upload/err/$($date)-$($fileName)-R-err.txt") -Value $log.message
@@ -79,6 +80,7 @@ elseif ($Response -eq "1") {
         else {
             ++$status.err
         }
+        $WebResponse = $null
     }
     Read-Host "$($status.ok) fisiere au fost incarcate cu succes; $($status.err) erori.`nApasati ENTER prentu inchidere"
     exit
@@ -111,8 +113,8 @@ elseif (($Response -eq "2") -or ($Response -eq "3")) {
             $totalPagini = 1
             $pagina = 1
             while ($pagina -le $totalPagini) {
-                $Response = [Proxy]::DownloadMessageList($InceputPerioada, $SfarsitPerioada, $Options.Config.CifEmitent, $pagina, $type)
-                $ResponseJson = ($Response.Content | ConvertFrom-Json)
+                $WebResponse = [Proxy]::DownloadMessageList($InceputPerioada, $SfarsitPerioada, $Options.Config.CifEmitent, $pagina, $type)
+                $ResponseJson = ($WebResponse.Content | ConvertFrom-Json)
                 $totalPagini = $ResponseJson.numar_total_pagini
                 if ($Response -eq "2") {
                     foreach ($mesaj in $ResponseJson.mesaje) {
@@ -142,18 +144,24 @@ elseif (($Response -eq "2") -or ($Response -eq "3")) {
                     }
                 }
                 elseif ($Response -eq "3") {
-                    Set-Content -Path "$($Options.DataDir)download/$($date)-$($type)-p$($pagina).json" -Value $Response.Content
+                    Set-Content -Path "$($Options.DataDir)download/mesaje/$($date)-$($type)-p$($pagina).json" -Value $WebResponse.Content
+                    $data = $WebResponse.Content | ConvertFrom-Json
+                    foreach ($mesaj in $data.mesaje) {
+                        $mesaj | Export-Csv -NoTypeInformation -Append -Force "$($Options.DataDir)download/mesaje/$($date)-$($type).csv"
+                    }
+                    ++$status.$type.ok
                 }
                 ++$pagina
+                $WebResponse = $null
             }
         }
     } catch {
         $e = [PSCustomObject]@{
             date = $date
-            message = $_.ToString
+            message = $_
         }
         $e | Export-Csv -NoTypeInformation -Append -Force "$($Options.DataDir)log/$($date.substring(0, 6))-errors.csv"
-        "Eroare: $($_.ToString)"
+        "Eroare: $($_)"
     }
     $status.Keys | ForEach-Object {
         "$($_) $($status[$_].ok) ok $($status[$_].err) err"

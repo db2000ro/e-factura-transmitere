@@ -24,6 +24,7 @@ if (!(Test-Path $Options.DataDir)) {
     New-Item -Path ($Options.DataDir + "download/T/") -ItemType "directory" -Force
     New-Item -Path ($Options.DataDir + "download/P/") -ItemType "directory" -Force
     New-Item -Path ($Options.DataDir + "download/R/") -ItemType "directory" -Force
+    New-Item -Path ($Options.DataDir + "download/mesaje/") -ItemType "directory" -Force
     New-Item -Path ($Options.DataDir + "upload/") -ItemType "directory" -Force
     New-Item -Path ($Options.DataDir + "upload/ok/") -ItemType "directory" -Force
     New-Item -Path ($Options.DataDir + "upload/err/") -ItemType "directory" -Force
@@ -93,6 +94,7 @@ if (($Options.ResetConfig -eq 1) -or ($Options.Config.CertThumbprint -eq "") -or
     if ($Response -Match "^[1-2]{1}$") {
         $Options.Config.Auth = ("cert", "OAuth")[([int]$Response) - 1]
     }
+    Set-Content -Path $Options.CfgFile -Value ($Options.Config | ConvertTo-Json)
 }
 
 return $Options
