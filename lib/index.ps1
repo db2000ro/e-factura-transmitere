@@ -39,8 +39,12 @@ elseif ($Response -eq "1") {
             $XMLString = Get-Content -Path $file
             $WebResponse = [Proxy]::Upload($Options.Config.CifEmitent, $XMLString, $Options.Config.Standard)
             try {
-                $ResponseXml = [xml] $WebResponse.Content
-
+                try {
+                    $ResponseXml = [xml] $WebResponse.Content
+                }
+                catch {
+                    throw "Raspunsul nu este un XML valid."
+                }
                 if ($ResponseXml.header.index_incarcare -eq $null) {
                     if ($ResponseXml.header.Errors.errorMessage -ne $null) {
                         throw $ResponseXml.header.Errors.errorMessage
@@ -63,15 +67,7 @@ elseif ($Response -eq "1") {
             $log.status = "err"
             $log.message = "$($_)"
             Move-Item -Path $file -Destination ("$($Options.DataDir)upload/err/$($date)-$($fileName)$($fileExtension)")
-            if ($ResponseXml -ne $null) {
-                Set-Content -Path ("$($Options.DataDir)upload/err/$($date)-$($fileName)-R-err.xml") -Value $ResponseXml.OuterXml
-            }
-            elseif ($WebResponse.Content -ne $null) {
-                Set-Content -Path ("$($Options.DataDir)upload/err/$($date)-$($fileName)-R-err.txt") -Value $WebResponse.Content
-            }
-            else {
-                Set-Content -Path ("$($Options.DataDir)upload/err/$($date)-$($fileName)-R-err.txt") -Value $log.message
-            }
+            Set-Content -Path ("$($Options.DataDir)upload/err/$($date)-$($fileName)-R-err.txt") -Value "$($log.message)`n$($WebResponse.Content)"
         }
         $log | Export-Csv -NoTypeInformation -Append -Force "$($Options.DataDir)log/$($date.substring(0, 6))-upload.csv"
         if ($log.status -eq "ok") {
@@ -81,6 +77,7 @@ elseif ($Response -eq "1") {
             ++$status.err
         }
         $WebResponse = $null
+        $ResponseXml = $null
     }
     Read-Host "$($status.ok) fisiere au fost incarcate cu succes; $($status.err) erori.`nApasati ENTER prentu inchidere"
     exit
